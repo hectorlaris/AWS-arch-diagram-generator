@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging / build
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# Test / coverage caches
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Generated diagrams in the project root (keep custom icons under assets/)
+/*.png
+/*.svg
+
+# Kiro IDE files
+.kiro/
