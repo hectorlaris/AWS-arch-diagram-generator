@@ -38,6 +38,20 @@ class RenderResult:
 _LINE_BREAK_PATTERN = re.compile(r"<br\s*/?>", re.IGNORECASE)
 
 
+# AWS/Amazon official brand typeface is "Amazon Ember". Graphviz picks the
+# first available font from a comma-separated list, so we fall back to common
+# sans-serif faces (and finally the generic "sans-serif") when Amazon Ember is
+# not installed on the host system.
+_FONT_FAMILY = "Amazon Ember, Helvetica, Arial, sans-serif"
+
+# Font sizes (points) chosen to establish a visual hierarchy consistent with
+# AWS architecture diagrams: cluster/group titles larger than node labels,
+# edge labels slightly smaller.
+_CLUSTER_FONT_SIZE = "16"
+_NODE_FONT_SIZE = "14"
+_EDGE_FONT_SIZE = "13"
+
+
 def _format_display_label(label: str) -> str:
     """Convert HTML line-break tags in a label to real newlines.
 
@@ -103,7 +117,13 @@ def _create_nodes_in_cluster(
         mappings_by_id: Mapping of node_id to MappingResult for class lookup.
         node_objects: Dictionary to populate with node_id -> diagrams node instance.
     """
-    with Cluster(cluster.name):
+    with Cluster(
+        cluster.name,
+        graph_attr={
+            "fontname": _FONT_FAMILY,
+            "fontsize": _CLUSTER_FONT_SIZE,
+        },
+    ):
         # Instantiate nodes that belong directly to this cluster
         for node_id in cluster.node_ids:
             if node_id in mappings_by_id:
@@ -165,7 +185,21 @@ def render_diagram(
             show=False,
             direction=graph.direction,
             outformat=["png", "svg"],
-            graph_attr={"dpi": "150", "size": "10.24,7.68!"},
+            graph_attr={
+                "dpi": "150",
+                "size": "10.24,7.68!",
+                # Applies to the diagram title and is inherited by clusters.
+                "fontname": _FONT_FAMILY,
+                "fontsize": _CLUSTER_FONT_SIZE,
+            },
+            node_attr={
+                "fontname": _FONT_FAMILY,
+                "fontsize": _NODE_FONT_SIZE,
+            },
+            edge_attr={
+                "fontname": _FONT_FAMILY,
+                "fontsize": _EDGE_FONT_SIZE,
+            },
         ):
             # Create nodes that are NOT in any cluster first
             for mapping in mappings:
@@ -188,7 +222,11 @@ def render_diagram(
                     continue
 
                 if edge.label:
-                    source >> Edge(label=edge.label) >> target
+                    source >> Edge(
+                        label=edge.label,
+                        fontname=_FONT_FAMILY,
+                        fontsize=_EDGE_FONT_SIZE,
+                    ) >> target
                 else:
                     source >> target
 

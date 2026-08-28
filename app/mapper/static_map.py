@@ -63,6 +63,22 @@ AWS_SERVICE_MAP: dict[str, str] = {
     "kendra": "diagrams.aws.ml.Kendra",
     "translate": "diagrams.aws.ml.Translate",
     "transcribe": "diagrams.aws.ml.Transcribe",
+    # Serverless (services commonly used in AWS serverless architectures)
+    "lambdafunction": "diagrams.aws.compute.LambdaFunction",
+    "appsync": "diagrams.aws.integration.Appsync",
+    "eventbridgescheduler": "diagrams.aws.integration.EventbridgeScheduler",
+    "eventbridgepipes": "diagrams.aws.integration.EventbridgePipes",
+    "eventbridgerule": "diagrams.aws.integration.EventbridgeRule",
+    "auroraserverless": "diagrams.aws.database.Aurora",
+    "documentdb": "diagrams.aws.database.DocumentDB",
+    "keyspaces": "diagrams.aws.database.KeyspacesManagedApacheCassandraService",
+    "timestream": "diagrams.aws.database.Timestream",
+    "kinesis": "diagrams.aws.analytics.Kinesis",
+    "kinesisdatastreams": "diagrams.aws.analytics.KinesisDataStreams",
+    "kinesisdatafirehose": "diagrams.aws.analytics.KinesisDataFirehose",
+    "firehose": "diagrams.aws.analytics.KinesisDataFirehose",
+    "athena": "diagrams.aws.analytics.Athena",
+    "efs": "diagrams.aws.storage.EFS",
     # Storage
     "s3": "diagrams.aws.storage.S3",
     # General
@@ -83,6 +99,20 @@ AWS_SERVICE_MAP: dict[str, str] = {
     "awscodebuild": "diagrams.aws.devtools.Codebuild",
     "awscodepipeline": "diagrams.aws.devtools.Codepipeline",
     "awscodeconnections": "diagrams.aws.devtools.Codepipeline",
+    # Serverless aliases (with amazon/aws prefixes and common spellings)
+    "amazonapigateway": "diagrams.aws.network.APIGateway",
+    "awsstepfunctions": "diagrams.aws.integration.StepFunctions",
+    "awsfargate": "diagrams.aws.compute.Fargate",
+    "awsappsync": "diagrams.aws.integration.Appsync",
+    "amazoneventbridge": "diagrams.aws.integration.Eventbridge",
+    "amazonkinesis": "diagrams.aws.analytics.Kinesis",
+    "amazonkinesisdatafirehose": "diagrams.aws.analytics.KinesisDataFirehose",
+    "amazonathena": "diagrams.aws.analytics.Athena",
+    "amazonauroraserverless": "diagrams.aws.database.Aurora",
+    "amazondocumentdb": "diagrams.aws.database.DocumentDB",
+    "amazontimestream": "diagrams.aws.database.Timestream",
+    "amazonefs": "diagrams.aws.storage.EFS",
+    "amazoncognito": "diagrams.aws.security.Cognito",
 }
 
 

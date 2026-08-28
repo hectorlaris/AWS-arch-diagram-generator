@@ -18,6 +18,9 @@ SVG diagrams via Graphviz.
   dynamic introspection) with a sensible fallback.
 - Recognizes non-AWS icons (GitHub, Terraform, users, etc.) and AWS ML/AI
   services (e.g. Bedrock for "agent" nodes).
+- Built-in coverage for common AWS serverless services (Lambda, API Gateway,
+  Step Functions, EventBridge, AppSync, SQS, SNS, DynamoDB, Kinesis, Athena,
+  Aurora Serverless, and more).
 - User-configurable overrides via `overrides.json`, including your own custom
   icon images.
 - Produces self-contained SVGs with icons embedded as base64 (portable across
@@ -140,6 +143,25 @@ Matching is case-insensitive and tolerant of spaces, hyphens, underscores, and
 HTML tags. Descriptive multi-word labels are also matched token by token, so
 `"S3 Terraform State"` resolves to S3 and `"Risk Agent"` resolves to Amazon
 Bedrock.
+
+### Serverless coverage
+
+The static map includes the AWS services most commonly used in serverless
+architectures, so they resolve automatically without needing overrides:
+
+| Category    | Services (examples)                                             |
+|-------------|----------------------------------------------------------------|
+| Compute     | Lambda, Lambda Function, Fargate                               |
+| API / Sync  | API Gateway, AppSync                                           |
+| Integration | Step Functions, SQS, SNS, EventBridge (Scheduler, Pipes, Rule) |
+| Data        | DynamoDB, Aurora Serverless, DocumentDB, Keyspaces, Timestream |
+| Analytics   | Kinesis (Data Streams / Firehose), Athena                     |
+| Storage     | S3, EFS                                                       |
+| Security    | Cognito                                                       |
+
+Labels match with or without the `Amazon`/`AWS` prefix and are
+case/spacing-insensitive (e.g. `"AWS Step Functions"`, `"stepfunctions"`, and
+`"Step Functions"` all resolve to the same icon).
 
 ## Customizing with `overrides.json`
 
