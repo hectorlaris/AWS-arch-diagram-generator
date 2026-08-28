@@ -1,0 +1,12 @@
+{
+  "Manual Approval": "diagrams.programming.flowchart.Decision",
+  "Source": "diagrams.programming.flowchart.StartEnd",
+  "Pipeline stopped": "diagrams.programming.flowchart.StartEnd",
+  "DevOps Email": "diagrams.aws.engagement.SimpleEmailServiceSesEmail",
+  "HUMAN REVIEW": "diagrams.aws.general.User",
+  "Knowledge Graph*": "diagrams.aws.database.Neptune",
+  "Knowledge Graph": "diagrams.aws.database.Neptune",
+  "ML Model": "diagrams.aws.ml.MachineLearning",
+  "Data Lake": "diagrams.aws.analytics.LakeFormation",
+  "IVC Copilot UI": "logo.png"
+}
