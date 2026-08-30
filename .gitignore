@@ -27,9 +27,12 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Generated diagrams in the project root (keep custom icons under assets/)
+# Generated diagrams / exported images in the project root
+# (custom icons under assets/ are still tracked)
 /*.png
 /*.svg
+/*.jpg
+/*.jpeg
 
 # Kiro IDE files
 .kiro/
