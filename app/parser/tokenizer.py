@@ -63,16 +63,38 @@ _SUBGRAPH_END_PATTERN = re.compile(
     r"\bend\b", re.IGNORECASE
 )
 
-# Edge with label: A -->|label| B or A -.->|label| B or A ==>|label| B
-# Also handles A[label] -->|text| B[label] by matching the node id before brackets
-_EDGE_LABELED_PATTERN = re.compile(
-    r"([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\]|\([^)]*\))?\s*(-->|-.->|==>)\|([^|]*)\|\s*([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\]|\([^)]*\))?"
+# Intra-subgraph direction directive: "direction LR" / "direction TB" etc.
+# This sets a subgraph's internal orientation and must NOT be treated as a node.
+_SUBGRAPH_DIRECTION_PATTERN = re.compile(
+    r"direction\s+(TD|LR|TB|RL|BT)\b", re.IGNORECASE
 )
 
-# Edge without label: A --> B, A -.-> B, A ==> B
-# Also handles A[label] --> B[label] by matching the node id before brackets
+# Reusable fragments for edge matching.
+# A node reference is an id optionally followed by a [..] or (..) label part.
+_NODE_REF = r"[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\]|\([^)]*\))?"
+
+# Arrow with a piped label: -->|text|, -.->|text|, ==>|text|, <-->|text| etc.
+# Group 2 = arrow, group 3 = label text.
+_EDGE_LABELED_PATTERN = re.compile(
+    r"(" + _NODE_REF + r")\s*"
+    r"(<?-{1,2}\.?-?>|<?={1,2}>|<-->|<->)\s*"
+    r"\|([^|]*)\|\s*"
+    r"(" + _NODE_REF + r")"
+)
+
+# Dotted arrow with an inline label between dots: A -. text .-> B
+# Group 2 is a synthetic dotted marker; group 3 = label text.
+_EDGE_DOTTED_INLINE_PATTERN = re.compile(
+    r"(" + _NODE_REF + r")\s*"
+    r"-\.\s*([^.]*?)\s*\.->\s*"
+    r"(" + _NODE_REF + r")"
+)
+
+# Plain arrow without a label: -->, -.->, ==>, <-->, <->, <==>.
 _EDGE_PLAIN_PATTERN = re.compile(
-    r"([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\]|\([^)]*\))?\s*(-->|-.->|==>)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]*\]|\([^)]*\))?"
+    r"(" + _NODE_REF + r")\s*"
+    r"(<?-\.->|<?-{1,2}>|<?={1,2}>)\s*"
+    r"(" + _NODE_REF + r")"
 )
 
 # Node with bracket label: id[label text]
@@ -91,7 +113,7 @@ _NODE_BARE_PATTERN = re.compile(
 )
 
 # Keywords that should not be treated as bare nodes
-_KEYWORDS = {"graph", "flowchart", "subgraph", "end", "td", "lr", "tb", "rl"}
+_KEYWORDS = {"graph", "flowchart", "subgraph", "end", "direction", "td", "lr", "tb", "rl", "bt"}
 
 
 def _strip_quotes(label: str) -> str:
@@ -146,6 +168,28 @@ def _extract_subgraph_name(raw_name: str) -> str:
     return raw_name
 
 
+def _extract_subgraph_id(raw_name: str):
+    """Extract the subgraph identifier, if present.
+
+    In Mermaid, a subgraph may be declared as `subgraph ID["Title"]`, where
+    ID is an identifier used by edges that target the whole subgraph. When the
+    subgraph is declared with only a title (e.g. `subgraph VPC`), there is no
+    separate id and this returns None.
+
+    Args:
+        raw_name: Everything after 'subgraph ' on the line.
+
+    Returns:
+        The subgraph identifier string, or None if there is no bracketed
+        title (i.e. no distinct id).
+    """
+    import re as _re
+    m = _re.match(r'([A-Za-z_][A-Za-z0-9_]*)\s*[\[(]', raw_name)
+    if m:
+        return m.group(1)
+    return None
+
+
 
 def _arrow_to_token_type(arrow: str) -> TokenType:
     """Map an arrow string to its corresponding TokenType.
@@ -191,6 +235,12 @@ def tokenize(text: str) -> List[Token]:
         if stripped.startswith(("classDef ", "class ", "style ", "linkStyle ")):
             continue
 
+        # Skip intra-subgraph direction directives (e.g. "direction LR").
+        # These set a subgraph's orientation and are not nodes. Only skip when
+        # the line is exactly the directive (not part of a node label).
+        if _SUBGRAPH_DIRECTION_PATTERN.fullmatch(stripped):
+            continue
+
         # Try direction declaration first
         match = _DIRECTION_PATTERN.match(stripped)
         if match:
@@ -210,12 +260,13 @@ def tokenize(text: str) -> List[Token]:
             col = line.index(stripped) + 1
             raw_name = match.group(1).strip()
             name = _extract_subgraph_name(raw_name)
+            sub_id = _extract_subgraph_id(raw_name)
             tokens.append(Token(
                 type=TokenType.SUBGRAPH_START,
                 value=match.group(0),
                 line=line_num,
                 column=col,
-                groups={"name": name},
+                groups={"name": name, "id": sub_id},
             ))
             continue
 
@@ -229,6 +280,14 @@ def tokenize(text: str) -> List[Token]:
                 column=col,
                 groups={},
             ))
+            continue
+
+        # Try dotted edge with an inline label: A -. text .-> B
+        match = _EDGE_DOTTED_INLINE_PATTERN.search(stripped)
+        if match:
+            _tokenize_dotted_inline_edge(
+                match, stripped, line, line_num, tokens
+            )
             continue
 
         # Try labeled edge: A -->|label| B
@@ -306,6 +365,77 @@ def _tokenize_labeled_edge(
     _emit_node_reference(target_id, line_num, target_col, tokens)
 
 
+def _node_id_only(node_ref: str) -> str:
+    """Extract just the identifier from a node reference.
+
+    A node reference may include an inline label, e.g. "A[Label]" or
+    "A(Label)". This returns only the leading identifier ("A").
+
+    Args:
+        node_ref: The captured node reference text.
+
+    Returns:
+        The bare node identifier.
+    """
+    m = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", node_ref)
+    return m.group(1) if m else node_ref
+
+
+def _tokenize_dotted_inline_edge(
+    match: re.Match, stripped: str, line: str, line_num: int, tokens: List[Token]
+) -> None:
+    """Tokenize a dotted edge with an inline label: A -. text .-> B.
+
+    Emits source node, a dotted edge token, an edge label token, and the
+    target node. The label text ("text") is NOT treated as a node.
+
+    Args:
+        match: The regex match for the dotted inline edge.
+        stripped: The stripped line text.
+        line: The full original line text.
+        line_num: The 1-based line number.
+        tokens: The token list to append to.
+    """
+    source_ref = match.group(1)
+    label = match.group(2).strip()
+    target_ref = match.group(3)
+
+    source_id = _node_id_only(source_ref)
+    target_id = _node_id_only(target_ref)
+
+    offset = line.index(stripped)
+
+    # Source node
+    _emit_node_with_label_if_present(
+        source_id, stripped, line, line_num, offset, tokens
+    )
+
+    # Dotted edge token
+    edge_col = offset + match.start(2) + 1
+    tokens.append(Token(
+        type=TokenType.EDGE_DOTTED,
+        value="-.->",
+        line=line_num,
+        column=edge_col,
+        groups={"source": source_id, "target": target_id},
+    ))
+
+    # Label token (only if there is actual label text)
+    if label:
+        tokens.append(Token(
+            type=TokenType.EDGE_LABEL,
+            value=label,
+            line=line_num,
+            column=edge_col,
+            groups={"label": label},
+        ))
+
+    # Target node
+    _emit_node_with_label_if_present(
+        target_id, stripped, line, line_num, offset, tokens
+    )
+
+
 def _tokenize_labeled_edge_with_nodes(
     match: re.Match, stripped: str, line: str, line_num: int, tokens: List[Token]
 ) -> None:
@@ -321,10 +451,10 @@ def _tokenize_labeled_edge_with_nodes(
         line_num: The 1-based line number.
         tokens: The token list to append to.
     """
-    source_id = match.group(1)
+    source_id = _node_id_only(match.group(1))
     arrow = match.group(2)
     label = match.group(3)
-    target_id = match.group(4)
+    target_id = _node_id_only(match.group(4))
 
     offset = line.index(stripped)
 
@@ -412,9 +542,9 @@ def _tokenize_plain_edge_with_nodes(
         line_num: The 1-based line number.
         tokens: The token list to append to.
     """
-    source_id = match.group(1)
+    source_id = _node_id_only(match.group(1))
     arrow = match.group(2)
-    target_id = match.group(3)
+    target_id = _node_id_only(match.group(3))
 
     offset = line.index(stripped)
 

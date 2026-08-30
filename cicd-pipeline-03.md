@@ -1,11 +1,11 @@
-flowchart TB
+flowchart LR
     %% Triggers
     EB1[("⏰ EventBridge Scheduler<br/>cron: 0 6 * * ? *<br/>(Daily 6 AM)")]
     EB2[("⏰ EventBridge Rule<br/>rate: 15 minutes")]
 
     %% Lambdas
-    SL["🧠 SummaryLambda<br/>Python 3.12 | 60s timeout"]
-    ML["🧠 MonitorLambda<br/>Python 3.12 | 300s timeout"]
+    SL["SummaryLambda<br/>Python 3.12 | 60s timeout"]
+    ML["MonitorLambda<br/>Python 3.12 | 300s timeout"]
 
     %% AWS Services
     S3[("📦 S3 State Store<br/>Versioned + SSE-S3")]
@@ -16,7 +16,7 @@ flowchart TB
 
     %% External
     GH["🐙 GitHub REST API<br/>Commits, Issues, PRs"]
-    Email["📬 Gmail / IMAP<br/>Unread Messages"]
+    Email["Gmail / IMAP<br/>Unread Messages"]
     User["👤 Self-Employed Professional<br/>hector.serrano@colombiatechsas.com"]
 
     %% Trigger connections

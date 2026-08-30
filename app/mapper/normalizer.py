@@ -16,13 +16,22 @@ _STOPWORDS = {
     "read", "write", "init", "push", "main", "target", "devops",
 }
 
+# Matches any character that is NOT an ASCII letter or digit. Used to strip
+# emojis, punctuation, slashes, parentheses, plus signs, and all other
+# non-alphanumeric noise so that only the meaningful service name remains.
+_NON_ALNUM = re.compile(r"[^a-z0-9]")
+
+# Splits a label into candidate word tokens on any run of non-alphanumeric
+# characters (whitespace, slashes, parentheses, emojis, etc.).
+_TOKEN_SPLIT = re.compile(r"[^A-Za-z0-9]+")
+
 
 def normalize_service_name(label: str) -> str:
     """Normalize a node label for service matching.
 
-    Performs case-insensitive comparison by lowercasing,
-    strips HTML tags (like <br/>), then strips all whitespace,
-    hyphens, and underscores.
+    Lowercases the label, removes HTML tags (like <br/>), and strips ALL
+    non-alphanumeric characters (whitespace, hyphens, underscores, emojis,
+    punctuation), leaving only ASCII letters and digits.
 
     Args:
         label: The raw node label from Mermaid syntax.
@@ -32,20 +41,20 @@ def normalize_service_name(label: str) -> str:
     """
     # Strip HTML tags like <br/>, <br>, etc.
     cleaned = re.sub(r"<[^>]+>", " ", label)
-    # Lowercase and strip whitespace/hyphens/underscores
-    return re.sub(r"[\s\-_]", "", cleaned.lower())
+    # Lowercase, then remove every non-alphanumeric character.
+    return _NON_ALNUM.sub("", cleaned.lower())
 
 
 def _normalize_token(text: str) -> str:
-    """Lowercase a token and strip whitespace, hyphens, and underscores.
+    """Lowercase a token and strip all non-alphanumeric characters.
 
     Args:
         text: The raw token text.
 
     Returns:
-        The normalized token.
+        The normalized token (ASCII letters and digits only).
     """
-    return re.sub(r"[\s\-_]", "", text.lower().strip())
+    return _NON_ALNUM.sub("", text.lower())
 
 
 def extract_service_candidates(label: str) -> List[str]:
@@ -57,15 +66,19 @@ def extract_service_candidates(label: str) -> List[str]:
       1. Each <br/>-delimited segment, normalized (with amazon/aws prefix
          stripped variants).
       2. The full label normalized.
-      3. Individual whitespace-delimited tokens (to catch service names
-         embedded in descriptive labels like "S3 Terraform State" -> "s3"),
+      3. Individual word tokens split on any non-alphanumeric run (to catch
+         service names embedded in descriptive labels like
+         "Networking (VPC / Subnets)" -> "networking", "vpc", "subnets"),
          excluding generic stopwords and very short tokens to avoid false
          positives against the large diagrams.aws class hierarchy.
+
+    Emojis and punctuation are removed throughout, so labels like
+    "🌐 Networking" resolve the same as "Networking".
 
     Examples:
       - "Amazon S3<br/>Pipeline Artifacts" -> ["amazons3", "s3", ...]
       - "S3 Terraform State" -> ["s3terraformstate", "s3", ...]
-      - "DynamoDB State Lock" -> ["dynamodbstatelock", "dynamodb", ...]
+      - "🌐 Networking<br/>(VPC / Subnets)" -> ["networking", "vpc", "subnets", ...]
 
     Args:
         label: The raw node label from Mermaid syntax.
@@ -94,9 +107,10 @@ def extract_service_candidates(label: str) -> List[str]:
     # 2. Full label normalized
     _add(normalize_service_name(label))
 
-    # 3. Individual word tokens - skip stopwords and very short tokens
-    #    to prevent accidental matches (e.g. "by", "managed", "state").
-    for word in tag_free.split():
+    # 3. Individual word tokens - split on any non-alphanumeric run so that
+    #    emojis, slashes, and parentheses act as separators. Skip stopwords
+    #    and very short tokens to prevent accidental matches.
+    for word in _TOKEN_SPLIT.split(tag_free):
         token = _normalize_token(word)
         if len(token) < 2:
             continue

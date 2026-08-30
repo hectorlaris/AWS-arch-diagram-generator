@@ -21,6 +21,7 @@ delimiter-stripped) form so minor formatting differences still match.
 """
 
 import importlib
+import re
 import json
 import logging
 import os
@@ -228,7 +229,13 @@ def validate_overrides(
 def lookup_override(node_label: str) -> Optional[str]:
     """Look up an override import path for a node label.
 
-    Tries an exact label match first, then a normalized match.
+    Resolution order:
+      1. Exact label match.
+      2. Normalized full-label match (emoji/punctuation-insensitive).
+      3. Normalized match on the first line of the label (the text before
+         the first <br/>), so a label like
+         "Manual Approval<br/>(details)" still matches an override keyed on
+         "Manual Approval".
 
     Args:
         node_label: The display label of the Mermaid node.
@@ -241,13 +248,22 @@ def lookup_override(node_label: str) -> Optional[str]:
     if not overrides:
         return None
 
-    # Exact match
+    # 1. Exact match
     if node_label in overrides:
         return overrides[node_label]
 
-    # Normalized match
+    # 2. Normalized full-label match
     normalized = normalize_service_name(node_label)
-    return overrides.get(normalized)
+    if normalized in overrides:
+        return overrides[normalized]
+
+    # 3. Normalized match on the first line (before the first <br/>)
+    first_line = re.split(r"<br\s*/?>", node_label, maxsplit=1, flags=re.IGNORECASE)[0]
+    first_norm = normalize_service_name(first_line)
+    if first_norm and first_norm != normalized and first_norm in overrides:
+        return overrides[first_norm]
+
+    return None
 
 
 def clear_overrides_cache() -> None:

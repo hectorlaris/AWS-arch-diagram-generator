@@ -8,5 +8,9 @@
   "Knowledge Graph": "diagrams.aws.database.Neptune",
   "ML Model": "diagrams.aws.ml.MachineLearning",
   "Data Lake": "diagrams.aws.analytics.LakeFormation",
-  "IVC Copilot UI": "logo.png"
+  "IVC Copilot UI": "logo.png",
+  "SummaryLambda<br/>Python 3.12 | 60s timeout": "diagrams.aws.compute.LambdaFunction",
+  "MonitorLambda<br/>Python 3.12 | 300s timeout": "diagrams.aws.compute.LambdaFunction",
+  "Gmail / IMAP<br/>Unread Messages": "Gmail -  IMAP.PNG",
+  "👤 Self-Employed Professional<br/>hector.serrano@colombiatechsas.com": "diagrams.aws.general.User"
 }

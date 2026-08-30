@@ -128,7 +128,10 @@ def _handle_subgraph_start(
         token: The SUBGRAPH_START token with the cluster name.
         cluster_stack: The current stack of open clusters.
     """
-    cluster = MermaidCluster(name=token.groups["name"])
+    cluster = MermaidCluster(
+        name=token.groups["name"],
+        cluster_id=token.groups.get("id"),
+    )
     cluster_stack.append(cluster)
 
 

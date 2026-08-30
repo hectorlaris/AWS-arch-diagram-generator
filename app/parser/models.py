@@ -68,11 +68,16 @@ class MermaidCluster:
         name: Display name of the cluster.
         node_ids: IDs of nodes directly contained in this cluster.
         children: Nested sub-clusters within this cluster.
+        cluster_id: Optional Mermaid identifier of the subgraph (the token
+            before the bracketed title, e.g. "OBJETIVO" in
+            `subgraph OBJETIVO["..."]`). Used to resolve edges that target a
+            subgraph rather than a plain node.
     """
 
     name: str
     node_ids: List[str] = field(default_factory=list)
     children: List["MermaidCluster"] = field(default_factory=list)
+    cluster_id: Optional[str] = None
 
 
 @dataclass

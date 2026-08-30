@@ -51,6 +51,72 @@ _CLUSTER_FONT_SIZE = "16"
 _NODE_FONT_SIZE = "14"
 _EDGE_FONT_SIZE = "13"
 
+# Edge (step/action) labels use a bold italic style to match the look of
+# official AWS reference architecture diagrams, where numbered steps such as
+# "Assume Role" or "Deploy Serverless Stack" are emphasized in bold italics.
+_EDGE_FONT_FAMILY = "Amazon Ember Bold Italic, Helvetica-BoldOblique, Arial, sans-serif"
+
+# Output resolution. Higher DPI produces crisper text and icons in the PNG.
+_OUTPUT_DPI = "300"
+
+
+# Edge visual styles per Mermaid arrow type, mirroring official AWS reference
+# architecture diagrams: the main flow (thick "==>") is drawn as a bold
+# colored arrow, normal flow ("-->") as a solid dark arrow, and dependencies
+# ("-.->") as a thin dashed grey arrow.
+#
+# Each entry maps an IR edge style to Graphviz edge attributes.
+_EDGE_STYLES = {
+    "thick": {
+        "color": "#D45B07",       # AWS-style orange/red for the primary flow
+        "penwidth": "3.0",
+        "style": "solid",
+        "fontcolor": "#D45B07",
+    },
+    "solid": {
+        "color": "#232F3E",       # AWS "squid ink" dark for normal flow
+        "penwidth": "1.8",
+        "style": "solid",
+        "fontcolor": "#232F3E",
+    },
+    "dotted": {
+        "color": "#879196",       # muted grey for secondary dependencies
+        "penwidth": "1.3",
+        "style": "dashed",
+        "fontcolor": "#5A6570",
+    },
+}
+
+
+def _build_edge(edge) -> Edge:
+    """Build a styled diagrams.Edge for a parsed Mermaid edge.
+
+    Applies color, thickness, and line style based on the edge's Mermaid
+    arrow type, and attaches the bold-italic label styling when the edge
+    has a label.
+
+    Args:
+        edge: A MermaidEdge from the parsed IR.
+
+    Returns:
+        A configured diagrams.Edge instance.
+    """
+    style = _EDGE_STYLES.get(edge.style, _EDGE_STYLES["solid"])
+
+    attrs = {
+        "color": style["color"],
+        "penwidth": style["penwidth"],
+        "style": style["style"],
+    }
+
+    if edge.label:
+        attrs["label"] = edge.label
+        attrs["fontname"] = _EDGE_FONT_FAMILY
+        attrs["fontsize"] = _EDGE_FONT_SIZE
+        attrs["fontcolor"] = style["fontcolor"]
+
+    return Edge(**attrs)
+
 
 def _format_display_label(label: str) -> str:
     """Convert HTML line-break tags in a label to real newlines.
@@ -100,6 +166,47 @@ def _collect_node_clusters(
         for node_id in cluster.node_ids:
             node_to_cluster[node_id] = cluster.name
         _collect_node_clusters(cluster.children, node_to_cluster)
+
+
+def _build_cluster_target_map(
+    clusters: List[MermaidCluster],
+    result: Dict[str, str],
+) -> None:
+    """Map each subgraph id to a representative inner node id.
+
+    Graphviz cannot terminate an edge on a cluster directly, so an edge that
+    targets a subgraph is redirected to a node inside it. This builds a
+    mapping from a cluster's id to the first node found within that cluster
+    (searching nested children if the cluster has no direct nodes).
+
+    Args:
+        clusters: The cluster hierarchy to traverse.
+        result: Dictionary populated with cluster_id -> representative node id.
+    """
+    for cluster in clusters:
+        if cluster.cluster_id:
+            rep = _first_node_in_cluster(cluster)
+            if rep is not None:
+                result[cluster.cluster_id] = rep
+        _build_cluster_target_map(cluster.children, result)
+
+
+def _first_node_in_cluster(cluster: MermaidCluster):
+    """Return the first node id inside a cluster, searching children.
+
+    Args:
+        cluster: The cluster to inspect.
+
+    Returns:
+        A node id, or None if the cluster (and its children) contain none.
+    """
+    if cluster.node_ids:
+        return cluster.node_ids[0]
+    for child in cluster.children:
+        found = _first_node_in_cluster(child)
+        if found is not None:
+            return found
+    return None
 
 
 def _create_nodes_in_cluster(
@@ -170,6 +277,11 @@ def render_diagram(
     # Determine which nodes belong to clusters
     node_cluster_map = _get_node_cluster_map(graph)
 
+    # Map subgraph ids to a representative inner node, so edges that target a
+    # whole subgraph can be redirected there instead of creating a phantom node.
+    cluster_target_map: Dict[str, str] = {}
+    _build_cluster_target_map(graph.clusters, cluster_target_map)
+
     # Collect warnings from mappings
     warnings: List[WarningEntry] = [
         m.warning for m in mappings if m.warning is not None
@@ -186,11 +298,17 @@ def render_diagram(
             direction=graph.direction,
             outformat=["png", "svg"],
             graph_attr={
-                "dpi": "150",
-                "size": "10.24,7.68!",
+                "dpi": _OUTPUT_DPI,
                 # Applies to the diagram title and is inherited by clusters.
                 "fontname": _FONT_FAMILY,
                 "fontsize": _CLUSTER_FONT_SIZE,
+                # Layout tuning for a compact, tidy look closer to official
+                # AWS reference diagrams.
+                "nodesep": "0.6",      # spacing between sibling nodes
+                "ranksep": "0.8",      # spacing between ranks (levels)
+                "splines": "ortho",    # right-angle connectors like AWS
+                "pad": "0.5",          # padding around the whole drawing
+                "compound": "true",    # allow edges to/from clusters
             },
             node_attr={
                 "fontname": _FONT_FAMILY,
@@ -201,8 +319,12 @@ def render_diagram(
                 "fontsize": _EDGE_FONT_SIZE,
             },
         ):
-            # Create nodes that are NOT in any cluster first
+            # Create nodes that are NOT in any cluster first. Skip ids that
+            # are actually subgraph ids (edges to them are redirected below),
+            # so we do not render a phantom node for a subgraph reference.
             for mapping in mappings:
+                if mapping.node_id in cluster_target_map:
+                    continue
                 if mapping.node_id not in node_cluster_map:
                     node_objects[mapping.node_id] = mapping.diagrams_class(
                         _format_display_label(mapping.node_label)
@@ -214,21 +336,17 @@ def render_diagram(
                     cluster, mappings_by_id, node_objects
                 )
 
-            # Connect edges
+            # Connect edges. If an endpoint references a subgraph id, redirect
+            # it to a representative node inside that subgraph.
             for edge in graph.edges:
-                source = node_objects.get(edge.source_id)
-                target = node_objects.get(edge.target_id)
+                source_id = cluster_target_map.get(edge.source_id, edge.source_id)
+                target_id = cluster_target_map.get(edge.target_id, edge.target_id)
+                source = node_objects.get(source_id)
+                target = node_objects.get(target_id)
                 if source is None or target is None:
                     continue
 
-                if edge.label:
-                    source >> Edge(
-                        label=edge.label,
-                        fontname=_FONT_FAMILY,
-                        fontsize=_EDGE_FONT_SIZE,
-                    ) >> target
-                else:
-                    source >> target
+                source >> _build_edge(edge) >> target
 
     except Exception as exc:
         raise RenderError(str(exc)) from exc
