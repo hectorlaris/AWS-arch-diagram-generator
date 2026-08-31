@@ -1,4 +1,7 @@
-"""Unit tests for the service resolver module."""
+"""Unit tests for the service resolver module.
+
+Covers dynamic cache building, class import resolution, and warning entries.
+"""
 
 import pytest
 from unittest.mock import patch, MagicMock

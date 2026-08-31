@@ -1,6 +1,5 @@
 """Custom exceptions for the Diagram Renderer component."""
 
-
 class RenderError(Exception):
     """Raised when Graphviz fails to produce diagram output.
 
